@@ -82,7 +82,6 @@ const getPrevKeys = (editor, {column, row}) => {
 const getLastOfType = (editor, type, {column, row}, skip = 0) => {
   const content = editor.getValue();
   const lines = content.split("\n");
-  const line = String(lines[row]);
 
   checkRow = -1 + row;
 
@@ -298,7 +297,7 @@ const formatJson = (editor, jsonObject = {}) => {
   }
 };
 
-function init() {
+document.addEventListener("DOMContentLoaded", () => {
   const iframeSrc = "https://playground.wordpress.net/";
   const iframe = document.querySelector("iframe");
   const textarea = document.querySelector("#jsontext");
@@ -310,7 +309,13 @@ function init() {
   editor.session.setMode("ace/mode/json");
 
   const langTools = ace.require('ace/ext/language_tools');
+
   langTools.setCompleters([]);
+
+  langTools.addCompleter({
+    triggerCharacters: ['"'],
+    getCompletions
+  });
 
   editor.setOptions({
     enableBasicAutocompletion: true,
@@ -330,13 +335,6 @@ function init() {
     readOnly: false
   });
 
-  const customCompleter = {
-    triggerCharacters: ['"'],
-    getCompletions
-  };
-
-  langTools.addCompleter(customCompleter);
-
   window.test = {
     iframeSrc,
     iframe,
@@ -355,15 +353,16 @@ function init() {
   });
 
   newTab.addEventListener('click', () => {
+    const query = new URLSearchParams();
+    const content = editor.getValue();
+    const blueprint = JSON.parse(content);
+    query.set('mode', 'seamless');
+    query.set('php', blueprint?.preferredVersions?.php);
+    query.set('wp', blueprint?.preferredVersions?.wp);
     window.open(
-      'https://playground.wordpress.net/#' + JSON.stringify(JSON.parse(editor.getValue())),
+      `https://playground.wordpress.net/?${query}#` + JSON.stringify(JSON.parse(editor.getValue())),
       'blueprint-preview',
     );
-  });
-
-  window.addEventListener('hashchange', () => {
-    loadFromHash(editor);
-    runBlueprint(editor);
   });
 
   if (window.location.hash) {
@@ -387,6 +386,9 @@ function init() {
   }
 
   runBlueprint(editor);
-}
 
-document.addEventListener("DOMContentLoaded", init);
+  window.addEventListener('hashchange', () => {
+    loadFromHash(editor);
+    runBlueprint(editor);
+  });
+});
