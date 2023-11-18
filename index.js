@@ -145,8 +145,6 @@ const completeStepSubProperty = async (stepType, resType, property, subKey, pref
   .flat()
   .filter(s => !resType || s.properties.resource.const === resType)
   .map(s => {
-    console.log(s.properties.resource.const);
-    console.log(Object.keys(s.properties));
     if(subKey === null) {
       return Object.keys(s.properties);
     }
@@ -190,8 +188,6 @@ const getCompletions = async (editor, session, pos, prefix, callback) => {
   const line = String(lines[pos.row]);
   const colon = line.indexOf(':');
 
-  console.log({prevKey});
-
   switch (prevKey[0]) {
     case 'preferredVersions':
       list.push('wp', 'php');
@@ -233,7 +229,6 @@ const getCompletions = async (editor, session, pos, prefix, callback) => {
         case 'steps': {
           const stepType = getLastOfType(editor, 'step', pos, 1);
           const resType = getLastOfType(editor, 'resource', pos, 1);
-          console.log({stepType, resType, prevKey, prefix});
           if (prevKey.length === 2) {
             if (colon === -1) {
               list.push(...await completeStepSubProperty(stepType, resType, prevKey[-2 + prevKey.length], null, prefix));
@@ -322,6 +317,16 @@ function init() {
     enableSnippets: true,
     useSoftTabs: true,
     tabSize: 2,
+  });
+
+  editor.commands.addCommand({
+    name: 'Run Blueprint',
+    bindKey: {
+      win: 'Ctrl-Enter',
+      mac: 'Command-Enter'
+    },
+    exec: editor => runBlueprint(editor),
+    readOnly: false
   });
 
   const customCompleter = {
