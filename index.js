@@ -153,7 +153,7 @@ const completeStepSubProperty = async (stepType, resType, property, subKey, pref
     return s.properties.resource.const;
   })
   .flat()
-  .filter(s => !resType || !['resource'].includes(s));
+  .filter(s => !['resource'].includes(s));
 }
 
 const completeStep = async(prefix) => {
@@ -181,6 +181,127 @@ const completeFeature = async (prefix) => {
   .filter(s => s[0] !== '$' && s.substr(0, prefix.length) === prefix);
 };
 
+const getCompletions = async (editor, session, pos, prefix, callback) => {
+  const list = [];
+  const prevKey = getPrevKeys(editor, pos);
+
+  const content = editor.getValue();
+  const lines = content.split("\n");
+  const line = String(lines[pos.row]);
+  const colon = line.indexOf(':');
+
+  console.log({prevKey});
+
+  switch (prevKey[0]) {
+    case 'preferredVersions':
+      list.push('wp', 'php');
+      break;
+
+    case 'wp':
+      list.push('latest');
+      break;
+
+    case 'php':
+      list.push(...await completePhpVersion(prefix));
+      break;
+
+    case 'steps': {
+      const stepType = getLastOfType(editor, 'step', pos);
+      if(stepType) {
+        list.push(...await completeStepProperty(stepType, prefix));
+      }
+      else {
+        list.push('step');
+      }
+    }
+    break;
+
+    case 'step':
+      list.push(...await completeStep(prefix));
+      break;
+
+    case 'features':
+      list.push(...await completeFeature(prefix));
+      break;
+
+    case undefined:
+      list.push(...await completeRootKey(prefix));
+      break;
+
+    default:
+      switch (prevKey[-1 + prevKey.length]) {
+        case 'steps': {
+          const stepType = getLastOfType(editor, 'step', pos, 1);
+          const resType = getLastOfType(editor, 'resource', pos, 1);
+          console.log({stepType, resType, prevKey, prefix});
+          if (prevKey.length === 2) {
+            if (colon === -1) {
+              list.push(...await completeStepSubProperty(stepType, resType, prevKey[-2 + prevKey.length], null, prefix));
+            }
+          }
+          else if (prevKey.length === 3 && prevKey[0] === 'resource') {
+            list.push(...await completeStepSubProperty(stepType, resType, prevKey[-2 + prevKey.length], prevKey[0], prefix));
+          }
+        }
+        break;
+      }
+
+      break;
+  }
+
+  const {row,column} = pos;
+
+  const qA = (!lines[row][-1 + column] || lines[row][-1 + column] === ' ') ? '"' : '';
+  const qB = (!lines[row][column] || lines[row][column] === ' ') ? '"' : '';
+
+  for (const fill of list) {
+    callback(null, [{name: fill, value: qA + fill + qB, score: 1, meta: "Blueprint Schema"}]);
+  }
+};
+
+let errorTag;
+const showError = (error) => {
+  console.error(error);
+  if(!errorTag) errorTag = document.getElementById('error-output');
+  errorTag.innerText = String(error);
+}
+const clearError = (error) => {
+  if(!errorTag) errorTag = document.getElementById('error-output');
+  errorTag.innerText = '';
+}
+
+const runBlueprint = async (editor) => {
+  try {
+    clearError();
+    const blueprintJsonObject = JSON.parse(editor.getValue());
+    const startPlaygroundWeb = (await importStartPlaygroundWeb).startPlaygroundWeb;
+    await startPlaygroundWeb({
+      iframe: document.getElementById('wp-playground'),
+      remoteUrl: `https://playground.wordpress.net/remote.html`,
+      blueprint: blueprintJsonObject,
+    });
+  } catch (error) {
+    showError(error);
+  }
+};
+
+const loadFromHash = (editor) => {
+  const hash = decodeURI(window.location.hash.substr(1));
+  try {
+    formatJson(editor, JSON.parse(hash));
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+const formatJson = (editor, jsonObject = {}) => {
+  const existing = editor.getSession().getValue();
+  const formatted = JSON.stringify(jsonObject, null, 2) + "\n";
+  if(formatted !== existing) {
+    editor.getSession().setValue(formatted)
+  }
+};
+
 function init() {
   const iframeSrc = "https://playground.wordpress.net/";
   const iframe = document.querySelector("iframe");
@@ -188,7 +309,7 @@ function init() {
   const button = document.querySelector("button#run");
   const newTab = document.querySelector("button#new-tab");
 
-  var editor = ace.edit("jsontext");
+  var editor = ace.edit('jsontext');
   editor.setTheme("ace/theme/github_dark");
   editor.session.setMode("ace/mode/json");
 
@@ -205,81 +326,7 @@ function init() {
 
   const customCompleter = {
     triggerCharacters: ['"'],
-    getCompletions: async (editor, session, pos, prefix, callback) => {
-      const list = [];
-	    const prevKey = getPrevKeys(editor, pos);
-
-      console.log({prevKey});
-
-      switch (prevKey[0]) {
-        case 'preferredVersions':
-          list.push('wp', 'php');
-          break;
-
-        case 'wp':
-          list.push('latest');
-          break;
-
-        case 'php':
-          list.push(...await completePhpVersion(prefix));
-          break;
-
-        case 'steps': {
-          const stepType = getLastOfType(editor, 'step', pos);
-          if(stepType) {
-            list.push(...await completeStepProperty(stepType, prefix));
-          }
-          else {
-            list.push('step');
-          }
-        }
-        break;
-
-        case 'step':
-          list.push(...await completeStep(prefix));
-          break;
-
-        case 'features':
-          list.push(...await completeFeature(prefix));
-          break;
-
-        case undefined:
-          list.push(...await completeRootKey(prefix));
-          break;
-
-        default:
-          switch (prevKey[-1 + prevKey.length]) {
-            case 'steps': {
-              const stepType = getLastOfType(editor, 'step', pos, 1);
-              const resType = getLastOfType(editor, 'resource', pos, 1);
-              console.log({stepType, resType, prevKey, prefix});
-              if (prevKey.length === 2) {
-                list.push(...await completeStepSubProperty(stepType, resType, prevKey[-2 + prevKey.length], null, prefix));
-
-              }
-              else if (prevKey.length === 3 && prevKey[0] === 'resource') {
-                list.push(...await completeStepSubProperty(stepType, resType, prevKey[-2 + prevKey.length], prevKey[0], prefix));
-              }
-            }
-            break;
-          }
-
-          break;
-      }
-
-      const content = editor.getValue();
-      const lines = content.split("\n");
-
-      const {row,column} = pos;
-
-      const qA = (!lines[row][-1 + column] || lines[row][-1 + column] === ' ') ? '"' : '';
-      const qB = (!lines[row][column] || lines[row][column] === ' ') ? '"' : '';
-
-      for (const fill of list) {
-        callback(null, [{name: fill, value: qA + fill + qB, score: 1, meta: "Blueprint Schema"}]);
-      }
-
-    }
+    getCompletions
   };
 
   langTools.addCompleter(customCompleter);
@@ -291,60 +338,50 @@ function init() {
     button,
   };
 
-  const formatJson = (el, jsonObject = {}) => editor.setValue(JSON.stringify(jsonObject, null, 2) + "\n");
-
-  const appendBlueprint = () => {
+  button.addEventListener('click', () => {
     try {
-      const blueprintJsonObject = JSON.parse(editor.getValue());
-      importStartPlaygroundWeb.then(({startPlaygroundWeb}) => {
-        startPlaygroundWeb({
-          iframe: document.getElementById('wp-playground'),
-          remoteUrl: `https://playground.wordpress.net/remote.html`,
-          blueprint: blueprintJsonObject,
-        });
-      });
-    } catch (error) {
-      console.error(error);
+      clearError();
+      window.location.hash = JSON.stringify(JSON.parse(editor.getValue()));
+      runBlueprint(editor);
     }
-  }
-
-  button.addEventListener('click', () => appendBlueprint({ fromButton: true }));
-
-  newTab.addEventListener('click', () => {
-	window.open(
-		'https://playground.wordpress.net/#' + JSON.stringify(JSON.parse(editor.getValue())),
-		'blueprint-preview',
-	);
+    catch (error) {
+      showError(error);
+    }
   });
 
-  let defaultBlueprint = {
-    landingPage: "/wp-admin/",
-    preferredVersions: {
-      php: "7.4",
-      wp: "5.9",
-    },
-    steps: [
-      {
-        step: "login",
-        username: "admin",
-        password: "password",
-      },
-    ],
-  };
+  newTab.addEventListener('click', () => {
+    window.open(
+      'https://playground.wordpress.net/#' + JSON.stringify(JSON.parse(editor.getValue())),
+      'blueprint-preview',
+    );
+  });
+
+  window.addEventListener('hashchange', () => {
+    loadFromHash(editor);
+    runBlueprint(editor);
+  });
 
   if (window.location.hash) {
-    const hash = decodeURI(window.location.hash.replace(/^#/, ""));
-    try {
-      const hashJson = JSON.parse(hash);
-      defaultBlueprint = hashJson;
-    } catch (error) {
-      console.error(error);
-    }
+    loadFromHash(editor);
+  }
+  else {
+    formatJson(editor, {
+      landingPage: "/wp-admin/",
+      preferredVersions: {
+        php: "7.4",
+        wp: "5.9",
+      },
+      steps: [
+        {
+          step: "login",
+          username: "admin",
+          password: "password",
+        },
+      ],
+    });
   }
 
-  formatJson(textarea, defaultBlueprint);
-
-  appendBlueprint();
+  runBlueprint(editor);
 }
 
 document.addEventListener("DOMContentLoaded", init);
