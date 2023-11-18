@@ -268,6 +268,7 @@ const clearError = (error) => {
 const runBlueprint = async (editor) => {
   try {
     clearError();
+    window.location.hash = JSON.stringify(JSON.parse(editor.getValue()));
     const blueprintJsonObject = JSON.parse(editor.getValue());
     const startPlaygroundWeb = (await importStartPlaygroundWeb).startPlaygroundWeb;
     await startPlaygroundWeb({
@@ -346,7 +347,6 @@ function init() {
   button.addEventListener('click', () => {
     try {
       clearError();
-      window.location.hash = JSON.stringify(JSON.parse(editor.getValue()));
       runBlueprint(editor);
     }
     catch (error) {
