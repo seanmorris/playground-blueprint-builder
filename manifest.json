@@ -38,5 +38,5 @@
 	"orientation": "landscape",
 	"theme_color": "black",
 	"short_name": "Playground Builder",
-	"start_url": "/"
+	"start_url": "/playground-blueprint-builder/"
 }
