@@ -3,32 +3,32 @@
 	"description": "WordPress Playground Builder",
 	"icons": [
 		{
-			"src": "/icons/WordPress-80.png",
+			"src": "./icons/WordPress-80.png",
 			"sizes": "80x80",
 			"type": "image/png"
 		}, {
-			"src": "/icons/WordPress-152.png",
+			"src": "./icons/WordPress-152.png",
 			"sizes": "152x152",
 			"type": "image/png"
 		}
 		, {
-			"src": "/icons/WordPress-167.png",
+			"src": "./icons/WordPress-167.png",
 			"sizes": "167x167",
 			"type": "image/png"
 		}, {
-			"src": "/icons/WordPress-180.png",
+			"src": "./icons/WordPress-180.png",
 			"sizes": "180x180",
 			"type": "image/png"
 		}, {
-			"src": "/icons/WordPress-192.png",
+			"src": "./icons/WordPress-192.png",
 			"sizes": "192x192",
 			"type": "image/png"
 		}, {
-			"src": "/icons/WordPress-256.png",
+			"src": "./icons/WordPress-256.png",
 			"sizes": "256x256",
 			"type": "image/png"
 		}, {
-			"src": "/icons/WordPress-512.png",
+			"src": "./icons/WordPress-512.png",
 			"sizes": "512x512",
 			"type": "image/png"
 		}
