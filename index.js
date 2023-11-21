@@ -1,5 +1,10 @@
+/*/ // Prod
 const importStartPlaygroundWeb = import('https://unpkg.com/@wp-playground/client/index.js');
 const fetchBlueprintSchema = fetch('https://unpkg.com/@wp-playground/blueprints/blueprint-schema.json').then(r=>r.json());
+/*/ // Dev
+const importStartPlaygroundWeb = import('http://localhost:8080/client/index.js');
+const fetchBlueprintSchema = fetch('http://localhost:8080/blueprints/blueprint-schema.json').then(r=>r.json());
+//*/
 
 const deref = (obj, root) => {
 	if (!obj || typeof obj !== 'object' || !('$ref' in obj)) {
@@ -60,7 +65,7 @@ const getPrevKeys = (editor, {column, row}) => {
 
 	let indent = 0;
 
-	while (line[indent] == ' ' || line[indent] == '  ') {
+	while (line[indent] == ' ' || line[indent] == "\t") {
 		indent++;
 	}
 
@@ -98,7 +103,7 @@ const getLastOfType = (editor, type, {column, row}, skip = 0) => {
 
     let indent = 0;
 
-    while (lines[checkRow][indent] == ' ' || lines[checkRow][indent] == '  ') {
+    while (lines[checkRow][indent] == ' ' || lines[checkRow][indent] == "\t") {
       indent++;
     }
 
@@ -120,6 +125,49 @@ const getLastOfType = (editor, type, {column, row}, skip = 0) => {
   return null;
 };
 
+const getPrevSiblings = (editor, {column, row}) => {
+  const content = editor.getValue();
+  const lines = content.split("\n");
+
+  checkRow = -1 + row;
+  let indent = 0;
+
+  while (lines[row][indent] == ' ' || lines[row][indent] == "\t") {
+    indent++;
+  }
+
+  const siblings = [];
+
+  while(checkRow >= 0) {
+    const openBracket = lines[checkRow].indexOf('{');
+
+    if(openBracket > -1 && openBracket < indent) {
+      break;
+    }
+
+    const openQuote = lines[checkRow].indexOf('"');
+    const closeQuote = lines[checkRow].indexOf('"', 1 + openQuote);
+    
+    if(openQuote > -1 && openQuote == indent) {
+      siblings.push(lines[checkRow].substring(1 + openQuote, closeQuote))
+    }
+
+    checkRow--;
+  }
+
+  return siblings;
+};
+
+const getStepProperties = async (stepType) => {
+  const schema = await fetchBlueprintSchema;
+  const reader = getSchemaReader(schema);
+  return reader.definitions.StepDefinition.oneOf
+  .filter(s => s.properties.step['const'] === stepType)
+  .map(s => s.properties)
+  .flat()
+  .pop();
+}
+
 const completeStepProperty = async (stepType, prefix) => {
   const schema = await fetchBlueprintSchema;
   return schema.definitions.StepDefinition.oneOf
@@ -129,6 +177,21 @@ const completeStepProperty = async (stepType, prefix) => {
   .filter(s => s.substr(0, prefix.length) === prefix)
   .filter(s => !['step', 'progress'].includes(s));
 };
+
+const getStepSubProperties = async(stepType, resType, property) => {
+  const schema = await fetchBlueprintSchema;
+  const reader = getSchemaReader(schema);
+  return reader.definitions.StepDefinition.oneOf
+  .filter(s => s.properties.step['const'] === stepType)
+  .map(s => {
+    return s.properties[property].anyOf;
+  })
+  .flat()
+  .filter(s => !resType || s.properties.resource.const === resType)
+  .map(s => s.properties)
+  .flat()
+  .pop();
+}
 
 const completeStepSubProperty = async (stepType, resType, property, subKey, prefix) => {
   if(!resType && !subKey) {
@@ -178,6 +241,9 @@ const completeFeature = async (prefix) => {
   .filter(s => s[0] !== '$' && s.substr(0, prefix.length) === prefix);
 };
 
+let debounce = null;
+let starting = null;
+
 const getCompletions = async (editor, session, pos, prefix, callback) => {
   const list = [];
   const prevKey = getPrevKeys(editor, pos);
@@ -186,6 +252,65 @@ const getCompletions = async (editor, session, pos, prefix, callback) => {
   const lines = content.split("\n");
   const line = String(lines[pos.row]);
   const colon = line.indexOf(':');
+
+  const {row,column} = pos;
+
+  const qA = (!lines[row][-1 + column] || lines[row][-1 + column] === ' ') ? '"' : '';
+  const qB = (!lines[row][column] || lines[row][column] === ' ') ? '"' : '';
+
+  if(prevKey.length === 3 && prefix.length >= 3 && prevKey.join('<') === 'slug<pluginZipFile<steps') {
+    const wpParams = new URLSearchParams;
+    wpParams.set('action', 'query_plugins');
+    wpParams.set('request[page]', '1');
+    wpParams.set('request[per_page]', '100');
+    wpParams.set('request[locale]', 'en_US');
+    wpParams.set('request[search]', prefix);
+    wpParams.set('request[wp_version]', '6.4');
+    const proxyParams = new URLSearchParams;
+    proxyParams.set('url', `http://api.wordpress.org/plugins/info/1.2/?${wpParams}`);
+
+    if (debounce) {
+      clearTimeout(debounce);
+      debounce = null;
+    }
+
+    const res = await fetch(`https://playground.wordpress.net/plugin-proxy.php?${proxyParams}`);
+    const json = await res.json();
+    json?.plugins.map(p => {
+      var doc = new DOMParser().parseFromString(p.name, "text/html");
+      const meta = doc.documentElement.textContent;
+      callback(null, [{name: p.slug, value: qA + p.slug + qB, score: 1, meta}]);
+    });
+    debounce = setTimeout(async () => {
+    }, 250);
+  }
+
+  if(prevKey.length === 3 && prefix.length >= 3 && prevKey.join('<') === 'slug<themeZipFile<steps') {
+    const wpParams = new URLSearchParams;
+    wpParams.set('action', 'query_themes');
+    wpParams.set('request[page]', '1');
+    wpParams.set('request[per_page]', '100');
+    wpParams.set('request[locale]', 'en_US');
+    wpParams.set('request[search]', prefix);
+    wpParams.set('request[wp_version]', '6.4');
+    const proxyParams = new URLSearchParams;
+    proxyParams.set('url', `http://api.wordpress.org/themes/info/1.2/?${wpParams}`);
+
+    if (debounce) {
+      clearTimeout(debounce);
+      debounce = null;
+    }
+
+    const res = await fetch(`https://playground.wordpress.net/plugin-proxy.php?${proxyParams}`);
+    const json = await res.json();
+    json?.themes.map(p => {
+      var doc = new DOMParser().parseFromString(p.name, "text/html");
+      const meta = doc.documentElement.textContent;
+      callback(null, [{name: p.slug, value: qA + p.slug + qB, score: 1, meta}]);
+    });
+    debounce = setTimeout(async () => {
+    }, 250);
+  }
 
   switch (prevKey[0]) {
     case 'preferredVersions':
@@ -201,9 +326,11 @@ const getCompletions = async (editor, session, pos, prefix, callback) => {
       break;
 
     case 'steps': {
+      const used = await getPrevSiblings(editor, pos);
       const stepType = getLastOfType(editor, 'step', pos);
       if(stepType) {
-        list.push(...await completeStepProperty(stepType, prefix));
+        const suggestions = await completeStepProperty(stepType, prefix)
+        list.push(...(suggestions).filter(s => !used.includes(s)));
       }
       else {
         list.push('step');
@@ -230,7 +357,9 @@ const getCompletions = async (editor, session, pos, prefix, callback) => {
           const resType = getLastOfType(editor, 'resource', pos, 1);
           if (prevKey.length === 2) {
             if (colon === -1) {
-              list.push(...await completeStepSubProperty(stepType, resType, prevKey[-2 + prevKey.length], null, prefix));
+              const used = await getPrevSiblings(editor, pos);
+              const suggestions = await completeStepSubProperty(stepType, resType, prevKey[-2 + prevKey.length], null, prefix);
+              list.push(...suggestions.filter(s => !used.includes(s)));
             }
           }
           else if (prevKey.length === 3 && prevKey[0] === 'resource') {
@@ -242,11 +371,6 @@ const getCompletions = async (editor, session, pos, prefix, callback) => {
 
       break;
   }
-
-  const {row,column} = pos;
-
-  const qA = (!lines[row][-1 + column] || lines[row][-1 + column] === ' ') ? '"' : '';
-  const qB = (!lines[row][column] || lines[row][column] === ' ') ? '"' : '';
 
   for (const fill of list) {
     callback(null, [{name: fill, value: qA + fill + qB, score: 1, meta: "Blueprint Schema"}]);
@@ -264,20 +388,40 @@ const clearError = (error) => {
   errorTag.innerText = '';
 }
 
+const formatJson = (editor, jsonObject = {}) => {
+  const existing = editor.getSession().getValue();
+  const formatted = JSON.stringify(jsonObject, null, 2) + "\n";
+  if(formatted !== existing) {
+    editor.getSession().setValue(formatted)
+  }
+};
+
 const runBlueprint = async (editor) => {
+  if (starting) {
+    return;
+  }
+  document.body.setAttribute('data-starting', true);
   try {
     clearError();
     window.location.hash = JSON.stringify(JSON.parse(editor.getValue()));
     const blueprintJsonObject = JSON.parse(editor.getValue());
+    formatJson(editor, blueprintJsonObject);
     const startPlaygroundWeb = (await importStartPlaygroundWeb).startPlaygroundWeb;
-    await startPlaygroundWeb({
+    starting = startPlaygroundWeb({
       iframe: document.getElementById('wp-playground'),
       remoteUrl: `https://playground.wordpress.net/remote.html`,
       blueprint: blueprintJsonObject,
     });
-  } catch (error) {
+    await starting;
+    starting = null;
+  }
+  catch (error) {
     showError(error);
   }
+  finally {
+    document.body.setAttribute('data-starting', false);
+  }
+  
 };
 
 const loadFromHash = (editor) => {
@@ -286,14 +430,6 @@ const loadFromHash = (editor) => {
     formatJson(editor, JSON.parse(hash));
   } catch (error) {
     console.error(error);
-  }
-};
-
-const formatJson = (editor, jsonObject = {}) => {
-  const existing = editor.getSession().getValue();
-  const formatted = JSON.stringify(jsonObject, null, 2) + "\n";
-  if(formatted !== existing) {
-    editor.getSession().setValue(formatted)
   }
 };
 
@@ -328,11 +464,116 @@ document.addEventListener("DOMContentLoaded", () => {
   editor.commands.addCommand({
     name: 'Run Blueprint',
     bindKey: {
-      win: 'Ctrl-Enter',
-      mac: 'Command-Enter'
+      win: 'Ctrl-Enter|Ctrl-S',
+      mac: 'Command-Enter|Command-S'
     },
     exec: editor => runBlueprint(editor),
     readOnly: false
+  });
+
+  editor.getSession().on('change', async event => {
+    if(event.action !== 'insert' || event.fromServer) {
+      return;
+    }
+    const content = editor.getValue();
+    const lines = content.split("\n");
+    const quoteCount = (lines[event.start.row].match(/"/g) || []).length;
+    if(event.start.row === event.end.row && 1 < Math.abs(event.start.column - event.end.column)) {
+      if(lines[event.end.row][event.end.column] === '"') {
+        editor.moveCursorTo(event.end.row, event.end.column + 1);
+        return;
+      }
+    }
+    if(event.start.row !== event.end.row || 1 !== Math.abs(event.start.column - event.end.column)) {
+      return;
+    }
+
+    if (lines[event.end.row][event.end.column]) {
+      return;
+    }
+    const indent = lines[event.start.row].match(/^(\s+)/g)[0];
+    
+    const inserted = event.lines.join("\n");
+    const prevKey = getPrevKeys(editor, event.end);
+    if (inserted === ':') {
+      if(prevKey.length === 1 && prevKey[0] === 'landingPage') {
+        editor.getSession().insert({row: event.end.row, column: event.end.column},  ' ""');
+        editor.moveCursorTo(event.end.row, 1 + event.end.column);
+      }
+
+      if(prevKey.length === 1 && prevKey[0] === 'preferredVersions') {
+        editor.getSession().insert({row: event.end.row, column: event.end.column},  ' {}');
+        editor.moveCursorTo(event.end.row, 1 + event.end.column);
+      }
+
+      if(prevKey.length === 2 && prevKey[1] === 'preferredVersions') {
+        editor.getSession().insert({row: event.end.row, column: event.end.column},  ' ""');
+        editor.moveCursorTo(event.end.row, 1 + event.end.column);
+      }
+
+      if(prevKey.length === 1 && (prevKey[0] === 'steps' || prevKey[0] === 'features')) {
+        editor.getSession().insert({row: event.end.row, column: event.end.column},  ' []');
+        editor.moveCursorTo(event.end.row, 1 + event.end.column);
+      }
+      
+      if(prevKey.length === 3 && prevKey[2] === 'steps') {
+        const stepType = getLastOfType(editor, 'step', event.end, 1);
+        const resType = getLastOfType(editor, 'resource', event.end);
+        const subProps = await getStepSubProperties(stepType, resType, prevKey[1]);
+        const subProp = subProps[prevKey[0]];
+        if (subProp?.type === 'string') {
+          editor.getSession().insert({row: event.end.row, column: event.end.column},  ' ""');
+          editor.moveCursorTo(event.end.row, 2 + event.end.column);
+          editor.execCommand('startAutocomplete');
+        }
+        else if (subProp?.type === 'object') {
+          editor.getSession().insert({row: event.end.row, column: event.end.column},  ' {}');
+          editor.moveCursorTo(event.end.row, 2 + event.end.column);
+        }
+      }
+
+      if(prevKey.length === 2 && prevKey[0] === 'step' && prevKey[1] === 'steps') {
+        editor.getSession().insert({row: event.start.row, column: event.start.column + 1},  ' ""');
+        editor.moveCursorTo(event.end.row, 1 + event.end.column);
+        editor.execCommand('startAutocomplete');
+      }
+      else if(prevKey.length === 2 && prevKey[1] === 'steps') {
+        const stepType = await getLastOfType(editor, 'step', event.end);
+        const properties = await getStepProperties(stepType);
+        const property = properties[ prevKey[0] ] ?? null;
+        const propType = property.type ?? null;
+        const propRef = property['$ref'];
+        if (propType === 'string') {
+          editor.getSession().insert({row: event.end.row, column: event.end.column},  ' ""');
+          editor.moveCursorTo(event.end.row, 2 + event.end.column);
+        }
+        else if(propRef === '#/definitions/FileReference') {
+          editor.getSession().insert({row: event.end.row, column: event.end.column},  ' {}');
+          editor.moveCursorTo(event.end.row, 2 + event.end.column);
+        }
+      }
+      return;
+    }
+    if (inserted === '[') {
+      editor.getSession().insert({row: event.end.row, column: event.start.column + 1},  "]");
+      return;
+    }
+    if (inserted === '{') {
+      editor.getSession().insert({row: event.end.row, column: event.start.column + 1},  "}");
+      return;
+    }
+    if(inserted === ',') {
+      if (lines[event.start.row][-1 + event.start.column] !== '"') {
+        editor.getSession().insert({row: event.end.row, column: event.end.column},  "\n" + indent);
+        editor.moveCursorTo(1 + event.end.row, 1 + (indent.length));
+        return;
+      }
+      if (quoteCount % 2 === 0) {
+        editor.getSession().insert({row: event.end.row, column: event.end.column},  "\n" + indent + '""');
+        editor.moveCursorTo(1 + event.end.row, 1 + (indent.length));
+        editor.execCommand('startAutocomplete');
+      }
+    }
   });
 
   window.test = {
@@ -352,17 +593,21 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  let prevWin;
+
   newTab.addEventListener('click', () => {
+    runBlueprint(editor);
     const query = new URLSearchParams();
     const content = editor.getValue();
     const blueprint = JSON.parse(content);
     query.set('mode', 'seamless');
     query.set('php', blueprint?.preferredVersions?.php);
     query.set('wp', blueprint?.preferredVersions?.wp);
-    window.open(
-      `https://playground.wordpress.net/?${query}#` + JSON.stringify(JSON.parse(editor.getValue())),
-      'blueprint-preview',
-    );
+    const url = `https://playground.wordpress.net/?${query}#` + JSON.stringify(JSON.parse(editor.getValue()));
+    if (prevWin) {
+      prevWin.close();
+    }
+    prevWin = window.open(url, '_blank');
   });
 
   if (window.location.hash) {

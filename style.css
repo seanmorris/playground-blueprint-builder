@@ -165,19 +165,45 @@ button#new-tab {
 .toolbar {
   background-color: #40464d;
   text-align: right;
-}
-
-.toolbar button {
-  display: inline;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .toolbar span {
   color: white;
   font-size: 0.8rem;
   font-style: italic;
+  white-space: pre;
+  margin-left: 1rem;
+}
+
+.toolbar span.spacer {
+  flex: 1;
+  display: inline-block;
 }
 
 pre {
   margin-bottom: 0;
   margin-top: 10px;
+}
+
+button {
+  transition: opacity 0.5s ease-in-out;
+}
+
+[data-starting=true] button.run {
+  pointer-events: none;
+  filter: saturate(0.25);
+  opacity: 0.5;
+}
+
+[data-starting=true] button.run {
+  animation: button-pulse infinite alternate 0.5s;
+}
+
+@keyframes button-pulse {
+  from { opacity: 1; }
+  to { opacity: 0.5; }
 }
