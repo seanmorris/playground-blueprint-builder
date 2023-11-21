@@ -457,26 +457,17 @@ const runBlueprint = async (editor) => {
     starting = false;
   }, FALLBACK_TIMEOUT);
   try {
-/*/ //<<<<<<< HEAD
     window.location.hash = JSON.stringify(JSON.parse(editor.getValue()));
     if (starting) {
       return;
     }
     starting = true;
     clearError();
-    document.body.setAttribute('data-starting', true);
-    const blueprintJsonObject = JSON.parse(editor.getValue());
-    formatJson(editor, blueprintJsonObject);
-/*/ //=======
-    clearError();
+    const blueprintJsonObject = getCurrentBlueprint(editor);
     window.location.hash = JSON.stringify( getCurrentBlueprint(editor) );
-    const blueprintCopy = JSON.parse( JSON.stringify( getCurrentBlueprint(editor) ) );
+    formatJson(editor, blueprintJsonObject);
+    const blueprintCopy = JSON.parse(JSON.stringify(blueprintJsonObject));
     delete blueprintCopy.features; // I am getting error otherwise
-  
-    //window.location.hash = JSON.stringify(JSON.parse(editor.getValue()));
-    // const blueprintJsonObject = JSON.parse(editor.getValue());
-    // formatJson(editor, blueprintJsonObject);
-//*/ //>>>>>>> 0086b9e4666f2c2cdb5ed8a462509215cb5c1db7
     const startPlaygroundWeb = (await importStartPlaygroundWeb).startPlaygroundWeb;
     await startPlaygroundWeb({
       iframe: document.getElementById('wp-playground'),

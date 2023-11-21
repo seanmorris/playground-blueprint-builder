@@ -278,12 +278,15 @@ body[data-show-ai=true] section#ai {
 }
 
 #prompt {
+  background-color: #CCC;
   width: 100%;
   resize: none;
   box-sizing: border-box;
   margin: 0;
   flex: 1;
   padding: 1rem;
+  border-radius: 0;
+  border: 0;
 }
 
 button.close {
