@@ -165,7 +165,7 @@ button#new-tab {
   background-color: rgba(0, 0, 0, 0.25);
   margin: 0;
   padding: 1rem;
-  box-sizing: border-box;  
+  box-sizing: border-box;
 }
 
 .frame-wrapper:has( #error-output[srcdoc=""] ) {
@@ -205,11 +205,11 @@ button#new-tab {
 }
 
 .toolbar svg {
-  display: none;  
+  display: none;
 }
 
 body[data-loading="true"] .toolbar svg {
-  display: initial;  
+  display: initial;
 }
 
 .toolbar span.spacer {
@@ -268,16 +268,18 @@ button#zoom-out {
 section#ai {
   display: flex;
   flex-direction: column;
-  height:   0rem;
+  height: 0rem;
 	overflow: hidden;
 	transition: height 0.25s ease-in;
 }
 
 body[data-show-ai=true] section#ai {
-  height: 35rem;  
+  height: 35rem;
 }
 
 #prompt {
+  font-family: sans-serif;
+  font-size: 1.1rem;
   background-color: #CCC;
   width: 100%;
   resize: none;
