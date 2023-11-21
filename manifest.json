@@ -38,5 +38,19 @@
 	"orientation": "landscape",
 	"theme_color": "black",
 	"short_name": "Playground Builder",
-	"start_url": "/playground-blueprint-builder/"
+	"start_url": "/playground-blueprint-builder/",
+	"screenshots": [
+		{
+			"src": "./screenshot-tall.png",
+			"type": "image/png",
+			"sizes": "2160x2880",
+			"form_factor": "narrow"
+		},
+		{
+			"src": "./screenshot-wide.png",
+			"type": "image/jpg",
+			"sizes": "1440x1080",
+			"form_factor": "wide"
+		}
+	  ]
 }
