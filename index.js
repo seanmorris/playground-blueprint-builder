@@ -34,36 +34,29 @@ const formatJson = ( jsonObject = {}) => {
 };
 
 function getCurrentBlueprint() {
-  return JSON.parse( document.getElementById('jsontext').innerText.replace(/\n/g, '') );
+  const blueprint = JSON.parse( document.getElementById('jsontext').innerText.replace(/\n/g, '') );
+  if ( blueprint.features && blueprint.features.networking === false ) {
+    blueprint.features.networking = true;
+  }
+  return blueprint;
 }
 
 const fetchBluePrintFromAI = async () => {
-  const prompt = document.getElementById('prompt').value;
-  console.log( 'Calling AI', prompt );
-  // const response = await fetch('https://playground.wordpress.net/ai', {
-  //   method: 'POST',
-  //   headers: {
-  //     'Content-Type': 'application/json',
-  //   },
-  //   body: JSON.stringify({
-  //     prompt,
-  //     blueprintSchema: await fetchBlueprintSchema,
-  //   }),
-  // });
-  return {
-    landingPage: "/wp-admin/post-new.php?post_type=page",
-    preferredVersions: {
-      php: "7.4",
-      wp: "5.9",
+  const description = document.getElementById('prompt').value;
+  console.log( 'Calling AI', description );
+  const response = await fetch('https://public-api.wordpress.com/wpcom/v2/playground/ai/blueprint', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
     },
-    steps: [
-      {
-        step: "login",
-        username: "admin",
-        password: "password",
-      },
-    ],
-  };
+    body: JSON.stringify({
+      description,
+      blueprint,
+    }),
+  });
+  const json = await response.json();
+  console.log( 'Returned AI blueprint', json );
+  return json;
 };
 
 const runBlueprint = async (editor) => {
@@ -138,8 +131,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const query = new URLSearchParams();
 
     query.set('mode', 'seamless');
-    query.set('php', blueprint?.preferredVersions?.php);
-    query.set('wp', blueprint?.preferredVersions?.wp);
+    // query.set('php', blueprint?.preferredVersions?.php);
+    // query.set('wp', blueprint?.preferredVersions?.wp);
     const url = `https://playground.wordpress.net/?${query}#` + JSON.stringify(getCurrentBlueprint());
     if (prevWin) {
       prevWin.close();
@@ -152,6 +145,12 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   else {
     formatJson( {
+      features: {
+        networking: true
+      },
+      phpExtensionBundles: [
+        "kitchen-sink"
+      ],
       landingPage: "/wp-admin/",
       preferredVersions: {
         php: "7.4",
@@ -171,6 +170,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   window.addEventListener('hashchange', () => {
     loadFromHash();
-    runBlueprint(editor);
+    runBlueprint();
   });
 });
