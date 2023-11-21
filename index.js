@@ -1,10 +1,12 @@
-/*/ // Prod
+//*/ // Prod
 const importStartPlaygroundWeb = import('https://unpkg.com/@wp-playground/client/index.js');
 const fetchBlueprintSchema = fetch('https://unpkg.com/@wp-playground/blueprints/blueprint-schema.json').then(r=>r.json());
 /*/ // Dev
 const importStartPlaygroundWeb = import('http://localhost:8080/client/index.js');
 const fetchBlueprintSchema = fetch('http://localhost:8080/blueprints/blueprint-schema.json').then(r=>r.json());
 //*/
+
+const FALLBACK_TIMEOUT = 30*1000;
 
 const deref = (obj, root) => {
 	if (!obj || typeof obj !== 'object' || !('$ref' in obj)) {
@@ -147,7 +149,7 @@ const getPrevSiblings = (editor, {column, row}) => {
 
     const openQuote = lines[checkRow].indexOf('"');
     const closeQuote = lines[checkRow].indexOf('"', 1 + openQuote);
-    
+
     if(openQuote > -1 && openQuote == indent) {
       siblings.push(lines[checkRow].substring(1 + openQuote, closeQuote))
     }
@@ -262,11 +264,12 @@ const getCompletions = async (editor, session, pos, prefix, callback) => {
     const wpParams = new URLSearchParams;
     wpParams.set('action', 'query_plugins');
     wpParams.set('request[page]', '1');
-    wpParams.set('request[per_page]', '100');
+    wpParams.set('request[per_page]', '200');
     wpParams.set('request[locale]', 'en_US');
     wpParams.set('request[search]', prefix);
     wpParams.set('request[wp_version]', '6.4');
     const proxyParams = new URLSearchParams;
+
     proxyParams.set('url', `http://api.wordpress.org/plugins/info/1.2/?${wpParams}`);
 
     if (debounce) {
@@ -274,14 +277,21 @@ const getCompletions = async (editor, session, pos, prefix, callback) => {
       debounce = null;
     }
 
-    const res = await fetch(`https://playground.wordpress.net/plugin-proxy.php?${proxyParams}`);
-    const json = await res.json();
-    json?.plugins.map(p => {
-      var doc = new DOMParser().parseFromString(p.name, "text/html");
-      const meta = doc.documentElement.textContent;
-      callback(null, [{name: p.slug, value: qA + p.slug + qB, score: 1, meta}]);
-    });
+    document.body.setAttribute('data-loading', true);
+
     debounce = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://playground.wordpress.net/plugin-proxy.php?${proxyParams}`);
+        const json = await res.json();
+        json?.plugins.map(p => {
+          var doc = new DOMParser().parseFromString(p.name, "text/html");
+          const meta = doc.documentElement.textContent;
+          callback(null, [{name: p.slug, value: qA + p.slug + qB, score: 1, meta}]);
+        });
+      }
+      finally {
+        document.body.setAttribute('data-loading', false);
+      }
     }, 250);
   }
 
@@ -289,7 +299,7 @@ const getCompletions = async (editor, session, pos, prefix, callback) => {
     const wpParams = new URLSearchParams;
     wpParams.set('action', 'query_themes');
     wpParams.set('request[page]', '1');
-    wpParams.set('request[per_page]', '100');
+    wpParams.set('request[per_page]', '200');
     wpParams.set('request[locale]', 'en_US');
     wpParams.set('request[search]', prefix);
     wpParams.set('request[wp_version]', '6.4');
@@ -301,20 +311,28 @@ const getCompletions = async (editor, session, pos, prefix, callback) => {
       debounce = null;
     }
 
-    const res = await fetch(`https://playground.wordpress.net/plugin-proxy.php?${proxyParams}`);
-    const json = await res.json();
-    json?.themes.map(p => {
-      var doc = new DOMParser().parseFromString(p.name, "text/html");
-      const meta = doc.documentElement.textContent;
-      callback(null, [{name: p.slug, value: qA + p.slug + qB, score: 1, meta}]);
-    });
+    document.body.setAttribute('data-loading', true);
+
     debounce = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://playground.wordpress.net/plugin-proxy.php?${proxyParams}`);
+        const json = await res.json();
+        json?.themes.map(p => {
+          var doc = new DOMParser().parseFromString(p.name, "text/html");
+          const meta = doc.documentElement.textContent;
+          callback(null, [{name: p.slug, value: qA + p.slug + qB, score: 1, meta}]);
+        });
+      }
+      finally {
+        document.body.setAttribute('data-loading', false);
+      }
     }, 250);
   }
 
   switch (prevKey[0]) {
     case 'preferredVersions':
-      list.push('wp', 'php');
+      const used = await getPrevSiblings(editor, pos);
+      list.push(...['wp', 'php'].filter(s => !used.includes(s)));
       break;
 
     case 'wp':
@@ -381,47 +399,52 @@ let errorTag;
 const showError = (error) => {
   console.error(error);
   if(!errorTag) errorTag = document.getElementById('error-output');
-  errorTag.innerText = String(error);
+  const errDoc = `<head><style>body{ color: red; font-family: monospace; } pre{ white-space: pre-wrap; } p{ margin: 0.25rem; }</style></head><body>${error}</body>`;
+  errorTag.setAttribute('srcdoc', errDoc);
 }
 const clearError = (error) => {
   if(!errorTag) errorTag = document.getElementById('error-output');
-  errorTag.innerText = '';
+  errorTag.setAttribute('srcdoc', '');
 }
 
 const formatJson = (editor, jsonObject = {}) => {
   const existing = editor.getSession().getValue();
   const formatted = JSON.stringify(jsonObject, null, 2) + "\n";
   if(formatted !== existing) {
-    editor.getSession().setValue(formatted)
+    editor.getSession().setValue(formatted);
   }
 };
 
 const runBlueprint = async (editor) => {
-  if (starting) {
-    return;
-  }
-  document.body.setAttribute('data-starting', true);
   try {
-    clearError();
     window.location.hash = JSON.stringify(JSON.parse(editor.getValue()));
+    if (starting) {
+      return;
+    }
+    starting = true;
+    const fallback = setTimeout(() => document.body.setAttribute('data-starting', false), FALLBACK_TIMEOUT);
+    clearError();
+    document.body.setAttribute('data-starting', true);
     const blueprintJsonObject = JSON.parse(editor.getValue());
     formatJson(editor, blueprintJsonObject);
     const startPlaygroundWeb = (await importStartPlaygroundWeb).startPlaygroundWeb;
-    starting = startPlaygroundWeb({
+    await startPlaygroundWeb({
       iframe: document.getElementById('wp-playground'),
       remoteUrl: `https://playground.wordpress.net/remote.html`,
       blueprint: blueprintJsonObject,
     });
-    await starting;
-    starting = null;
+    document.body.setAttribute('data-starting', false);
+    clearTimeout(fallback);
+    starting = false;
   }
   catch (error) {
+    starting = false;
+    document.body.setAttribute('data-starting', false);
     showError(error);
+    clearTimeout(fallback);
   }
   finally {
-    document.body.setAttribute('data-starting', false);
   }
-  
 };
 
 const loadFromHash = (editor) => {
@@ -435,10 +458,13 @@ const loadFromHash = (editor) => {
 
 document.addEventListener("DOMContentLoaded", () => {
   const iframeSrc = "https://playground.wordpress.net/";
-  const iframe = document.querySelector("iframe");
+  const iframe = document.querySelector("iframe#wp-playground");
   const textarea = document.querySelector("#jsontext");
   const button = document.querySelector("button#run");
   const newTab = document.querySelector("button#new-tab");
+  const zIn  = document.querySelector("button#zoom-in");
+  const zOut = document.querySelector("button#zoom-out");
+  const zoomLevel = document.querySelector("span#zoom");
 
   var editor = ace.edit('jsontext');
   editor.setTheme("ace/theme/github_dark");
@@ -472,30 +498,40 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   editor.getSession().on('change', async event => {
-    if(event.action !== 'insert' || event.fromServer) {
+    if(event.action !== 'insert') {
       return;
     }
+
     const content = editor.getValue();
     const lines = content.split("\n");
     const quoteCount = (lines[event.start.row].match(/"/g) || []).length;
+
     if(event.start.row === event.end.row && 1 < Math.abs(event.start.column - event.end.column)) {
       if(lines[event.end.row][event.end.column] === '"') {
         editor.moveCursorTo(event.end.row, event.end.column + 1);
         return;
       }
     }
-    if(event.start.row !== event.end.row || 1 !== Math.abs(event.start.column - event.end.column)) {
-      return;
-    }
 
     if (lines[event.end.row][event.end.column]) {
       return;
     }
-    const indent = lines[event.start.row].match(/^(\s+)/g)[0];
-    
+
+    const indent = (lines[event.start.row].match(/^(\s+)/g) || [''])[0];
+
     const inserted = event.lines.join("\n");
     const prevKey = getPrevKeys(editor, event.end);
+
+    if (inserted.length > 1) {
+      return;
+    }
+
     if (inserted === ':') {
+      const colon = lines[event.start.row].indexOf(':');
+      if (colon > -1 && colon < event.start.column) {
+        return;
+      }
+
       if(prevKey.length === 1 && prevKey[0] === 'landingPage') {
         editor.getSession().insert({row: event.end.row, column: event.end.column},  ' ""');
         editor.moveCursorTo(event.end.row, 1 + event.end.column);
@@ -509,18 +545,20 @@ document.addEventListener("DOMContentLoaded", () => {
       if(prevKey.length === 2 && prevKey[1] === 'preferredVersions') {
         editor.getSession().insert({row: event.end.row, column: event.end.column},  ' ""');
         editor.moveCursorTo(event.end.row, 1 + event.end.column);
+        setTimeout(() => editor.execCommand('startAutocomplete'), 0);
       }
 
       if(prevKey.length === 1 && (prevKey[0] === 'steps' || prevKey[0] === 'features')) {
         editor.getSession().insert({row: event.end.row, column: event.end.column},  ' []');
         editor.moveCursorTo(event.end.row, 1 + event.end.column);
       }
-      
+
       if(prevKey.length === 3 && prevKey[2] === 'steps') {
         const stepType = getLastOfType(editor, 'step', event.end, 1);
         const resType = getLastOfType(editor, 'resource', event.end);
         const subProps = await getStepSubProperties(stepType, resType, prevKey[1]);
         const subProp = subProps[prevKey[0]];
+
         if (subProp?.type === 'string') {
           editor.getSession().insert({row: event.end.row, column: event.end.column},  ' ""');
           editor.moveCursorTo(event.end.row, 2 + event.end.column);
@@ -543,6 +581,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const property = properties[ prevKey[0] ] ?? null;
         const propType = property.type ?? null;
         const propRef = property['$ref'];
+
         if (propType === 'string') {
           editor.getSession().insert({row: event.end.row, column: event.end.column},  ' ""');
           editor.moveCursorTo(event.end.row, 2 + event.end.column);
@@ -552,27 +591,28 @@ document.addEventListener("DOMContentLoaded", () => {
           editor.moveCursorTo(event.end.row, 2 + event.end.column);
         }
       }
-      return;
     }
-    if (inserted === '[') {
+    else if (inserted === '[') {
       editor.getSession().insert({row: event.end.row, column: event.start.column + 1},  "]");
       return;
     }
-    if (inserted === '{') {
+    else if (inserted === '{') {
       editor.getSession().insert({row: event.end.row, column: event.start.column + 1},  "}");
       return;
     }
-    if(inserted === ',') {
+    else if(inserted === ',') {
+      const nextIndent = (lines[1 + event.start.row].match(/^(\s+)/g) || [''])[0];
+      if(nextIndent.length >= indent.length) {
+        return;
+      }
       if (lines[event.start.row][-1 + event.start.column] !== '"') {
         editor.getSession().insert({row: event.end.row, column: event.end.column},  "\n" + indent);
         editor.moveCursorTo(1 + event.end.row, 1 + (indent.length));
         return;
       }
-      if (quoteCount % 2 === 0) {
-        editor.getSession().insert({row: event.end.row, column: event.end.column},  "\n" + indent + '""');
-        editor.moveCursorTo(1 + event.end.row, 1 + (indent.length));
-        editor.execCommand('startAutocomplete');
-      }
+      editor.getSession().insert({row: event.end.row, column: event.end.column},  "\n" + indent + '""');
+      editor.moveCursorTo(1 + event.end.row, 1 + (indent.length));
+      editor.execCommand('startAutocomplete');
     }
   });
 
@@ -608,6 +648,28 @@ document.addEventListener("DOMContentLoaded", () => {
       prevWin.close();
     }
     prevWin = window.open(url, '_blank');
+  });
+
+  let zoom = 1;
+
+  zoomLevel.innerText = (100 * zoom).toFixed(0) + '%';
+
+  zIn.addEventListener('click', () => {
+    if (zoom > 3) {
+      return;
+    }
+    zoom += 0.1;
+    iframe.style.setProperty('--zoom', zoom);
+    zoomLevel.innerText = (100 * zoom).toFixed(0) + '%';
+  });
+
+  zOut.addEventListener('click', () => {
+    if (zoom < 0.35) {
+      return;
+    }
+    zoom -= 0.1;
+    iframe.style.setProperty('--zoom', zoom);
+    zoomLevel.innerText = (100 * zoom).toFixed(0) + '%';
   });
 
   if (window.location.hash) {
