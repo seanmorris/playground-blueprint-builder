@@ -8,23 +8,27 @@
     <!-- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pretty-print-json@2.0/dist/css/pretty-print-json.css" /> -->
     <!-- <script src="https://cdn.jsdelivr.net/npm/pretty-print-json@2.0/dist/pretty-print-json.min.js"></script> -->
     <!-- <script src="https://cdn.jsdelivr.net/npm/really-relaxed-json@0.3.2/src/umd.bundle.js" type="text/javascript"></script> -->
-    <link href="https://cdn.jsdelivr.net/npm/ace-builds@1.31.2/css/ace.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/ace-builds@1.31.2/src-min-noconflict/ace.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/ace-builds@1.31.2/src-min-noconflict/ext-language_tools.js"></script>
     <script src="index.js" type="text/javascript"></script>
   </head>
   <body>
     <div class = "playground-wrapper">
       <main>
-        <div class="column editor">
-          <div class="toolbar">
-            <span>⌘ ctrl + space: show autocomplete</span>
-            <span class = "spacer"></span>
-            <span>⌘ ctrl + enter:</span>
-            <button id = "run" class = "cta run">RUN IT</button>
+        <div class="column" style="flex-direction: column;">
+          <div style="flex:1">
+            <div class="toolbar">
+              <span>⌘ ctrl + space: show autocomplete</span>
+              <span class = "spacer"></span>
+              <span>⌘ ctrl + enter:</span>
+              <button id = "run" class = "cta run">RUN IT</button>
+            </div>
+            <h2 style="color:white">Describe your website</h2>
+            <textarea placeholder="What website do you want?" style="width:95%;height:60%"></textarea>
           </div>
-          <pre id="jsontext" class="json-container" contenteditable="true"></pre>
-          <pre id="error-output"></pre>
+          <div class="editor"  style="flex:1">
+            <h2 style="color:white">Blueprint Schema</h2>
+            <pre id="jsontext" class="json-container" contenteditable="true" style="color:white"></pre>
+            <pre id="error-output"></pre>
+          </div>
         </div>
         <div class = "separator"></div>
         <div class="column viewer">
