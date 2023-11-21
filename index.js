@@ -407,31 +407,81 @@ const clearError = (error) => {
   errorTag.setAttribute('srcdoc', '');
 }
 
-const formatJson = (editor, jsonObject = {}) => {
+const formatJson = (editor, jsonObject = {} ) => {
   const existing = editor.getSession().getValue();
   const formatted = JSON.stringify(jsonObject, null, 2) + "\n";
   if(formatted !== existing) {
     editor.getSession().setValue(formatted);
+    if(formatted !== existing) {
+      editor.getSession().setValue(formatted)
+    }
   }
+  // document.getElementById('jsontext').innerText = formatted;
+};
+
+function getCurrentBlueprint(editor) {
+  const blueprint = JSON.parse(editor.getValue());
+  if ( blueprint.features && blueprint.features.networking === false ) {
+    blueprint.features.networking = true;
+  }
+  return blueprint;
+}
+
+const fetchBluePrintFromAI = async (editor) => {
+  const description = document.getElementById('prompt').value;
+  const blueprint = getCurrentBlueprint(editor);
+  document.body.setAttribute('data-starting', true);
+  document.getElementById( 'prompt' ).setAttribute('disabled', true);
+
+  console.log( 'Calling AI', description, blueprint );
+  const response = await fetch('https://public-api.wordpress.com/wpcom/v2/playground/ai/blueprint', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      description,
+      blueprint,
+    }),
+  });
+  const json = await response.json();
+  document.getElementById( 'prompt' ).removeAttribute('disabled');
+  document.getElementById( 'prompt' ).innerText = '';
+  console.log( 'Returned AI blueprint', json );
+  return json;
 };
 
 const runBlueprint = async (editor) => {
+  const fallback = setTimeout(() => {
+    document.body.setAttribute('data-starting', false)
+    starting = false;
+  }, FALLBACK_TIMEOUT);
   try {
+/*/ //<<<<<<< HEAD
     window.location.hash = JSON.stringify(JSON.parse(editor.getValue()));
     if (starting) {
       return;
     }
     starting = true;
-    const fallback = setTimeout(() => document.body.setAttribute('data-starting', false), FALLBACK_TIMEOUT);
     clearError();
     document.body.setAttribute('data-starting', true);
     const blueprintJsonObject = JSON.parse(editor.getValue());
     formatJson(editor, blueprintJsonObject);
+/*/ //=======
+    clearError();
+    window.location.hash = JSON.stringify( getCurrentBlueprint(editor) );
+    const blueprintCopy = JSON.parse( JSON.stringify( getCurrentBlueprint(editor) ) );
+    delete blueprintCopy.features; // I am getting error otherwise
+  
+    //window.location.hash = JSON.stringify(JSON.parse(editor.getValue()));
+    // const blueprintJsonObject = JSON.parse(editor.getValue());
+    // formatJson(editor, blueprintJsonObject);
+//*/ //>>>>>>> 0086b9e4666f2c2cdb5ed8a462509215cb5c1db7
     const startPlaygroundWeb = (await importStartPlaygroundWeb).startPlaygroundWeb;
     await startPlaygroundWeb({
       iframe: document.getElementById('wp-playground'),
       remoteUrl: `https://playground.wordpress.net/remote.html`,
-      blueprint: blueprintJsonObject,
+      blueprint: blueprintCopy,
     });
     document.body.setAttribute('data-starting', false);
     clearTimeout(fallback);
@@ -444,6 +494,7 @@ const runBlueprint = async (editor) => {
     clearTimeout(fallback);
   }
   finally {
+    document.body.setAttribute('data-starting', false);
   }
 };
 
@@ -461,12 +512,25 @@ document.addEventListener("DOMContentLoaded", () => {
   const iframe = document.querySelector("iframe#wp-playground");
   const textarea = document.querySelector("#jsontext");
   const button = document.querySelector("button#run");
+  const aiButton = document.querySelector("button#open-ai");
+  const closeAi = document.querySelector("button#close-ai");
+  const genButton = document.querySelector("button#generate");
   const newTab = document.querySelector("button#new-tab");
   const zIn  = document.querySelector("button#zoom-in");
   const zOut = document.querySelector("button#zoom-out");
   const zoomLevel = document.querySelector("span#zoom");
 
-  var editor = ace.edit('jsontext');
+  let aiOpen = false;
+
+  aiButton.addEventListener('click', event => {
+    document.body.setAttribute('data-show-ai', aiOpen = !aiOpen);
+  });
+
+  closeAi.addEventListener('click', event => {
+    document.body.setAttribute('data-show-ai', aiOpen = false);
+  });
+
+  const editor = ace.edit('jsontext');
   editor.setTheme("ace/theme/github_dark");
   editor.session.setMode("ace/mode/json");
 
@@ -474,10 +538,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   langTools.setCompleters([]);
 
-  langTools.addCompleter({
-    triggerCharacters: ['"'],
-    getCompletions
-  });
+  langTools.addCompleter({triggerCharacters: ['"'],getCompletions});
 
   editor.setOptions({
     enableBasicAutocompletion: true,
@@ -633,17 +694,29 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  genButton.addEventListener('click', () => {
+    try {
+      clearError();
+      fetchBluePrintFromAI(editor).then( blueprint => {
+        formatJson(editor, blueprint);
+        runBlueprint(editor);
+      } );
+    }
+    catch (error) {
+      showError(error);
+    }
+  });
+
   let prevWin;
 
   newTab.addEventListener('click', () => {
     runBlueprint(editor);
     const query = new URLSearchParams();
-    const content = editor.getValue();
-    const blueprint = JSON.parse(content);
+
     query.set('mode', 'seamless');
-    query.set('php', blueprint?.preferredVersions?.php);
-    query.set('wp', blueprint?.preferredVersions?.wp);
-    const url = `https://playground.wordpress.net/?${query}#` + JSON.stringify(JSON.parse(editor.getValue()));
+    // query.set('php', blueprint?.preferredVersions?.php);
+    // query.set('wp', blueprint?.preferredVersions?.wp);
+    const url = `https://playground.wordpress.net/?${query}#` + JSON.stringify(getCurrentBlueprint(editor));
     if (prevWin) {
       prevWin.close();
     }
@@ -678,6 +751,9 @@ document.addEventListener("DOMContentLoaded", () => {
   else {
     formatJson(editor, {
       landingPage: "/wp-admin/",
+      phpExtensionBundles: [
+        "kitchen-sink"
+      ],
       preferredVersions: {
         php: "7.4",
         wp: "5.9",

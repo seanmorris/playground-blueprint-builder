@@ -37,6 +37,7 @@ main {
 
 .column {
   display: flex;
+  flex: 1;
   flex-direction: column;
   justify-content: space-between;
   align-items: center;
@@ -102,6 +103,7 @@ iframe {
 }
 
 button {
+  white-space: pre;
   font-weight: bold;
   background: none;
   border: none;
@@ -135,6 +137,14 @@ button.run {
   background-position: 0.325em center;
   background-repeat: no-repeat;
   padding-left: 1.85em;
+}
+
+button#open-ai {
+  background-image: url('./brain.svg');
+  background-size: auto 65%;
+  background-position: 0.325em center;
+  background-repeat: no-repeat;
+  padding-left: 2.45em;
 }
 
 button#new-tab {
@@ -253,4 +263,33 @@ button#zoom-out {
 @keyframes button-pulse {
   from { opacity: 1; }
   to { opacity: 0.5; }
+}
+
+section#ai {
+  display: flex;
+  flex-direction: column;
+  height:   0rem;
+	overflow: hidden;
+	transition: height 0.25s ease-in;
+}
+
+body[data-show-ai=true] section#ai {
+  height: 35rem;  
+}
+
+#prompt {
+  width: 100%;
+  resize: none;
+  box-sizing: border-box;
+  margin: 0;
+  flex: 1;
+  padding: 1rem;
+}
+
+button.close {
+  background-image: url(./x.svg);
+  background-size: auto 55%;
+  background-position: center;
+  background-repeat: no-repeat;
+  width: 2.2rem;
 }
