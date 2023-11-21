@@ -1,4 +1,4 @@
-/*/ // Prod
+//*/ // Prod
 const importStartPlaygroundWeb = import('https://unpkg.com/@wp-playground/client/index.js');
 const fetchBlueprintSchema = fetch('https://unpkg.com/@wp-playground/blueprints/blueprint-schema.json').then(r=>r.json());
 /*/ // Dev
