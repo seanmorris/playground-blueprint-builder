@@ -37,6 +37,35 @@ function getCurrentBlueprint() {
   return JSON.parse( document.getElementById('jsontext').innerText.replace(/\n/g, '') );
 }
 
+const fetchBluePrintFromAI = async () => {
+  const prompt = document.getElementById('prompt').value;
+  console.log( 'Calling AI', prompt );
+  // const response = await fetch('https://playground.wordpress.net/ai', {
+  //   method: 'POST',
+  //   headers: {
+  //     'Content-Type': 'application/json',
+  //   },
+  //   body: JSON.stringify({
+  //     prompt,
+  //     blueprintSchema: await fetchBlueprintSchema,
+  //   }),
+  // });
+  return {
+    landingPage: "/wp-admin/post-new.php?post_type=page",
+    preferredVersions: {
+      php: "7.4",
+      wp: "5.9",
+    },
+    steps: [
+      {
+        step: "login",
+        username: "admin",
+        password: "password",
+      },
+    ],
+  };
+};
+
 const runBlueprint = async (editor) => {
   if (starting) {
     return;
@@ -92,7 +121,10 @@ document.addEventListener("DOMContentLoaded", () => {
   button.addEventListener('click', () => {
     try {
       clearError();
-      //runBlueprint();
+      fetchBluePrintFromAI().then( blueprint => {
+        formatJson(blueprint);
+        runBlueprint();
+      } );
     }
     catch (error) {
       showError(error);
