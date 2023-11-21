@@ -43,7 +43,11 @@ function getCurrentBlueprint() {
 
 const fetchBluePrintFromAI = async () => {
   const description = document.getElementById('prompt').value;
-  console.log( 'Calling AI', description );
+  const blueprint = getCurrentBlueprint();
+  document.body.setAttribute('data-starting', true);
+  document.getElementById( 'prompt' ).setAttribute( 'disabled', true );
+
+  console.log( 'Calling AI', description, blueprint );
   const response = await fetch('https://public-api.wordpress.com/wpcom/v2/playground/ai/blueprint', {
     method: 'POST',
     headers: {
@@ -55,6 +59,8 @@ const fetchBluePrintFromAI = async () => {
     }),
   });
   const json = await response.json();
+  document.getElementById( 'prompt' ).setAttribute( 'disabled', false );
+  document.getElementById( 'prompt' ).innerText = '';
   console.log( 'Returned AI blueprint', json );
   return json;
 };
@@ -67,6 +73,9 @@ const runBlueprint = async (editor) => {
   try {
     clearError();
     window.location.hash = JSON.stringify( getCurrentBlueprint() );
+    const blueprintCopy = JSON.parse( JSON.stringify( getCurrentBlueprint() ) );
+    delete blueprintCopy.features; // I am getting error otherwise
+  
     //window.location.hash = JSON.stringify(JSON.parse(editor.getValue()));
     // const blueprintJsonObject = JSON.parse(editor.getValue());
     // formatJson(editor, blueprintJsonObject);
@@ -74,7 +83,7 @@ const runBlueprint = async (editor) => {
     starting = startPlaygroundWeb({
       iframe: document.getElementById('wp-playground'),
       remoteUrl: `https://playground.wordpress.net/remote.html`,
-      blueprint: getCurrentBlueprint(),
+      blueprint: blueprintCopy,
     });
     await starting;
     starting = null;
@@ -84,6 +93,7 @@ const runBlueprint = async (editor) => {
   }
   finally {
     document.body.setAttribute('data-starting', false);
+
   }
   
 };
@@ -145,13 +155,10 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   else {
     formatJson( {
-      features: {
-        networking: true
-      },
+      landingPage: "/wp-admin/",
       phpExtensionBundles: [
         "kitchen-sink"
       ],
-      landingPage: "/wp-admin/",
       preferredVersions: {
         php: "7.4",
         wp: "5.9",
